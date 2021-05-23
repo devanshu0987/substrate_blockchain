@@ -48,6 +48,9 @@ pub struct AuctionData<AccountId> {
 
 decl_storage! {
 	trait Store for Module<T: Config> as Auction {
+		// stores open auctions to be returned
+		// not waiting for iterable storage map query to be answered in discord
+		pub OpenAuctions get(fn get_open_auctions): Vec<u64> = Vec::with_capacity(20);
 		// reverse map of resource_hash and auctionId. Helps in quick find
 		// we maintian that one resource will only be owned by one person and only 1 instance of auction will exist for it
 		pub ResourceAuctionIdMapping get(fn get_mapping): map hasher(blake2_128_concat) Vec<u8> => u64;
@@ -55,7 +58,7 @@ decl_storage! {
 		// auctionId and auction data mapping. We only maintain open auctions here.
 		pub AuctionList get(fn get_auction_data): map hasher(blake2_128_concat) u64 => AuctionDataOf<T>;
 		// auctionId
-		pub NextAuctionId : u64 = 0;
+		pub NextAuctionId : u64 = 10;
 	}
 }
 
@@ -102,16 +105,25 @@ decl_module! {
 			let status = pallet_basic_token_and_resource::Module::<T>::resource_exist(&resource_hash);
 			// I dont know if this Error will work or not?
 			ensure!(status, <Error<T>>::ResourceNotPresent);
-
+			print("Resource present");
 			let owner = pallet_basic_token_and_resource::Module::<T>::get_resource_ownership(&resource_hash);
 			ensure!(sender == owner, <Error<T>>::SenderDoesNotOwnsResource);
-
+			print("Sender owns resource");
 			// check reverse map
 			let status = <ResourceAuctionIdMapping>::contains_key(&resource_hash);
 			ensure!(!status, <Error<T>>::AuctionAlreadyExist);
+			<ResourceAuctionIdMapping>::insert(&resource_hash, <NextAuctionId>::get());
+			print("Sanity checks work");
 			// Increment the id value
 			let auction_id = <NextAuctionId>::get();
 			let new_auction_id = auction_id.checked_add(1).expect("Entire increment fits in u64; qed");
+
+			// this maintains the current set of open auctions
+			let mut auctions = OpenAuctions::get();
+			auctions.push(auction_id);
+			<OpenAuctions>::put(auctions);
+
+			// increment the auction id
 			<NextAuctionId>::put(new_auction_id);
 
 			let initial_auction_data = AuctionData {
@@ -124,7 +136,7 @@ decl_module! {
 				bid_list : Vec::with_capacity(20)
 			};
 			<AuctionList<T>>::insert(&auction_id, &initial_auction_data);
-			print("Post data insert");
+			print("Auction data inserted");
 			Ok(())
 		}
 
@@ -134,22 +146,22 @@ decl_module! {
 			print("Inside finish_auction_for_resource");
 			// the origin should own this resource before closing auction for it
 			let status = pallet_basic_token_and_resource::Module::<T>::resource_exist(&resource_hash);
-			// I dont know if this Error will work or not?
 			ensure!(status, <Error<T>>::ResourceNotPresent);
-
+			print("Resource present");
 			let owner = pallet_basic_token_and_resource::Module::<T>::get_resource_ownership(&resource_hash);
 			ensure!(sender == owner, <Error<T>>::SenderDoesNotOwnsResource);
-
+			print("Sender owns Resource");
 			// check reverse map
 			let status = <ResourceAuctionIdMapping>::contains_key(&resource_hash);
-			ensure!(!status, <Error<T>>::AuctionDoesNotExist);
-
+			ensure!(status, <Error<T>>::AuctionDoesNotExist);
+			print("Auction exist");
 			let auction_id_stored = Self::get_mapping(&resource_hash);
 			ensure!(auction_id == auction_id_stored, <Error<T>>::AuctionDoesNotExist);
 			// once you are here, you just have to manipulate the data
 			let saved_auction = Self::get_auction_data(&auction_id);
 
 			// modify the state
+			print("Modify state");
 			let mut copy = saved_auction.clone();
 			copy.state = AuctionState::Finished;
 			// set new owner
@@ -160,13 +172,33 @@ decl_module! {
 			// once finished, we can again create a new auction for this resource but that will be by the new owner
 			<ResourceAuctionIdMapping>::remove(&resource_hash);
 
+			// this maintains the current set of open auctions. We need to remove this auction id from open
+			let mut index = 1000;
+			let mut auctions = OpenAuctions::get();
+			for (pos, item) in auctions.iter().enumerate()
+			{
+				if item == &auction_id_stored
+				{
+					index = pos;
+					break;
+				}
+			}
+
+			if index != 1000
+			{
+				// lets remove this from the auctions vector
+				auctions.remove(index);
+				// if you are here, then index can be only 1 thing
+				<OpenAuctions>::put(auctions);
+			}
+
 			// if finished, then transfer money from bidder to owner.
 			// due to my hack, the money is already present in the alice account
 			// we need to return back the money to people other than the max bidder
 
 			// if finshed, then we need to return back the money as well to the people.
 			// we need to transfer resource from owner to bidder
-			for (pos, item) in copy.bid_list.iter().enumerate()
+			for (_pos, item) in copy.bid_list.iter().enumerate()
 			{
 				// we reutrn money for all bidders except max_bid_owner
 				if item.bid_owner != saved_auction.max_bid_owner
@@ -192,12 +224,20 @@ decl_module! {
 
 			// check reverse map
 			let status = <ResourceAuctionIdMapping>::contains_key(&resource_hash);
-			ensure!(!status, <Error<T>>::AuctionDoesNotExist);
+			print(status);
+			ensure!(status, <Error<T>>::AuctionDoesNotExist);
 
 			let auction_id_stored = Self::get_mapping(&resource_hash);
+			print("Auction id stored");
+			print(auction_id_stored);
+
+			print("Auction id input");
+			print(auction_id);
 			ensure!(auction_id == auction_id_stored, <Error<T>>::AuctionDoesNotExist);
+			print("Auction exist");
 			// once you are here, you just have to manipulate the data
 			let saved_auction = Self::get_auction_data(&auction_id);
+			print("We got auction data");
 
 			// modify the state
 			let mut copy = saved_auction.clone();
@@ -216,10 +256,12 @@ decl_module! {
 					break;
 				}
 			}
-
+			print("New bid amount");
 			let new_bid_amount = previous_bid_amount + bid;
+			print(new_bid_amount);
 			ensure!(new_bid_amount > copy.max_bid, <Error<T>>::BidRejected);
 
+			print("Bid accepted");
 			// if you are here, then bid will be accepted. Hence modify stuff
 			copy.max_bid_owner = sender.clone();
 			copy.max_bid = new_bid_amount;
@@ -253,11 +295,12 @@ decl_module! {
 			// (_origin, to: T::AccountId, value: u64)
 			// to : we can get it by current owner of the auction
 			let to = saved_auction.initial_owner.unwrap();
+			print("Tranfer balance");
 			let _res = pallet_basic_token_and_resource::Module::<T>::transfer_balance(origin, to, bid);
 
 			// I am not sure what we should do here with the res, but lets test this functionality
 			// once
-			print("Post data insert");
+			print("Finish");
 			Ok(())
 		}
 	}

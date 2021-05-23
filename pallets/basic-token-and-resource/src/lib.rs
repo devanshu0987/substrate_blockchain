@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! Simple Token and Resource 
+//! Simple Token and Resource
 //! Balance
 //! 1. set total supply
 //! 2. establish ownership upon configuration of circulating tokens
@@ -8,12 +8,12 @@
 //! Resource
 //! Set who owns which resource or rather which resource is owned by whom
 //! In this system, there is only 1 owner
+use frame_support::sp_runtime::print;
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage, dispatch::DispatchResult, ensure,
 };
 use frame_system::ensure_signed;
 use sp_std::vec::Vec;
-use frame_support::sp_runtime::print;
 
 #[cfg(test)]
 mod tests;
@@ -64,7 +64,7 @@ decl_module! {
 
 		/// Initialize the token
 		/// transfers the total_supply amout to the caller
-		#[weight = 10_000]
+		#[weight = 0]
 		fn register_account(origin) -> DispatchResult {
 			let sender = ensure_signed(origin)?;
 			print("Inside register_account");
@@ -165,7 +165,7 @@ decl_module! {
 			ensure!(status, <Error<T>>::ReceiverNotRegistered);
 			let status = <Balances<T>>::contains_key(&sender);
 			print(status);
-			ensure!(status, <Error<T>>::ReceiverNotRegistered);	
+			ensure!(status, <Error<T>>::ReceiverNotRegistered);
 
 			// Write new ownership details to storage
 			<ResourceOwnership<T>>::insert(resource_hash, &to);
@@ -176,12 +176,12 @@ decl_module! {
 }
 
 impl<T: Config> Module<T> {
-    pub fn get_value() -> u32 {
-        // just comment
+	pub fn get_value() -> u32 {
+		// just comment
 		1
-    }
+	}
 
-	pub fn resource_exist(resource_hash : &Vec<u8>) -> bool {
+	pub fn resource_exist(resource_hash: &Vec<u8>) -> bool {
 		<ResourceOwnership<T>>::contains_key(&resource_hash)
 	}
 }
