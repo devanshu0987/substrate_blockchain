@@ -14,7 +14,7 @@
   - You will get certificate error. Select proceed and then you will get nginx error
   - At this point, your IP is whitelisted by the server and it will allow you to access the project
   - Otherwise, you will get error that cant connect to websocket in console.
-- Blockchain is hosted at "wss://23.100.29.42". Open this is Polkadot portal. Go here are open this in [Polkadot apps portal](https://polkadot.js.org/apps/#/explorer)
+- Blockchain is hosted at "wss://23.100.29.42". Open this in Polkadot portal. Go here are open this in [Polkadot apps portal](https://polkadot.js.org/apps/#/explorer)
 
 # Frontend
 
