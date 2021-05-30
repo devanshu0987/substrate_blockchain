@@ -16,6 +16,11 @@
   - Otherwise, you will get error that cant connect to websocket in console.
 - Blockchain is hosted at "wss://23.100.29.42". Open this in Polkadot portal. Go here are open this in [Polkadot apps portal](https://polkadot.js.org/apps/#/explorer)
 
+# How to run on local
+
+- Run docker script inside scripts folder. Make sure docker is installed and you are on linux system.
+- This will run the Blockchain on local
+
 # Frontend
 
 - The frontend is hosted at [Link](https://github.com/devanshu0987/node-express-boilerplate)
